@@ -21,10 +21,11 @@
 # Required packages: tidyverse, vegan, lme4, lmerTest, ggplot2, patchwork
 #
 # Output files:
-#   alpha_diversity_4panel.svg  — Figure 1: four alpha diversity metrics
-#   pca_park_year.svg           — Figure 2: PCA ordination by park and year
-#   regression_MAT_MAP_combined.svg — Figure 3: Shannon ~ MAT and MAP
-#   focal_species_all.svg       — Figure 4: focal species cover over time
+#   study_area_map.svg          _ Figure 1: map of three study parks
+#   alpha_diversity_4panel.svg  — Figure 2: four alpha diversity metrics
+#   pca_park_year.svg           — Figure 3: PCA ordination by park and year
+#   regression_MAT_MAP_combined.svg — Figure 4: Shannon ~ MAT and MAP
+#   focal_species_all.svg       — Figure 5: focal species cover over time
 #===============================================================================
 
 #Load packages
@@ -179,8 +180,7 @@ plot_df <- alpha_summary %>%
   pivot_longer(cols = c(richness_mean, shannon_mean, simpson_mean, 
                         evenness_mean),
                names_to = "metric", values_to = "value") %>%
-  mutate(
-    se = case_when(
+  mutate(se = case_when(
       metric == "richness_mean" ~ richness_se,
       metric == "shannon_mean"  ~ shannon_se,
       metric == "simpson_mean"  ~ simpson_se,
@@ -189,13 +189,10 @@ plot_df <- alpha_summary %>%
                     richness_mean = "Species Richness",
                     shannon_mean  = "Shannon (H')",
                     simpson_mean  = "Simpson",
-                    evenness_mean = "Evenness (Pielou)"),
-    panel_label = case_when(
-      metric == "Shannon (H')"      ~ "(b)",
-      metric == "Species Richness"  ~ "(d)",
-      metric == "Simpson"           ~ "(c)",
-      metric == "Evenness (Pielou)" ~ "(a)"
-    ))
+                    evenness_mean = "Evenness (Pielou)"))
+label_df_4panel <- data.frame(
+  metric      = c("Evenness (Pielou)", "Shannon (H')", "Simpson", "Species Richness"),
+  panel_label = c("(a)", "(b)", "(c)", "(d)"))
 
 fig_4panel <- ggplot(plot_df, aes(x = Year, y = value, group = Park, 
                                   colour = Park)) +
@@ -203,18 +200,25 @@ fig_4panel <- ggplot(plot_df, aes(x = Year, y = value, group = Park,
                 width = 0.4, linewidth = 0.4, alpha = 0.5, na.rm = TRUE) +
   geom_line(linewidth = 0.9) +
   geom_point(size = 2.5) +
-  geom_text(aes(x = -Inf, y = Inf, label = panel_label),
-            hjust = -0.4, vjust = 1.0,
-            colour = "black", size = 4,inherit.aes = FALSE) +
+  geom_text(data = label_df_4panel,
+            aes(x = -Inf, y = Inf, label = panel_label),
+            hjust    = 1.52,
+            vjust    = -1.5,
+            colour   = "black",
+            fontface = "plain",
+            size     = 3.8,
+            inherit.aes = FALSE) +
+  coord_cartesian(clip = "off") +
   scale_colour_manual(values = c("#C1440E", "#4A7C9E", "#2D6A4F")) +
   scale_x_continuous(breaks = sort(unique(dat$Year))) +
   facet_wrap(~ metric, scales = "free_y", ncol = 2) +
-  theme_classic() +
+  theme_classic(base_size = 12) +
   theme(legend.position  = "bottom",
         legend.title     = element_blank(),
         axis.text.x      = element_text(angle = 45, hjust = 1),
+        plot.margin = margin(t = 15, r = 5, b = 5, l = 5),
         strip.background = element_blank(),
-        strip.text       = element_text(face = "bold", size = 11),
+        strip.text       = element_text(size = 11),
         panel.spacing    = unit(1.2, "lines")) +
   labs(x = "Year", y = "Mean ± SE")
 
@@ -273,7 +277,6 @@ print(fig_pca_park)
 ggsave("pca_park_year.svg", fig_pca_park, width = 8, height = 6, dpi = 300)
 
 #===============================================================================
-#Research Question 1
 #How has community composition changed with temperature?
 
 #Mixed Effects Model
@@ -333,7 +336,6 @@ scale_fill_manual(values   = c("#C1440E", "#4A7C9E", "#2D6A4F"))+
 print(fig_reg_park)
 
 #===============================================================================
-#Research Question 2
 #How has community composition changed with precipitation?
 #How have temperature and precipitation interacted?
 
@@ -363,10 +365,6 @@ adonis_RQ2 <- adonis2(
 
 adonis_RQ2
 
-#Simple linear regression (no random effects): Shannon ~ MAP
-lm_MAP <- lm(Shannon ~ MAP, data = dat)
-summary(lm_MAP)
-
 #Regression using park-year means
 lm_MAP_park <- lm(mean_Shannon ~ MAP, data = park_year_summary)
 summary(lm_MAP_park)
@@ -395,7 +393,7 @@ fig_MAP_park <- ggplot(park_year_summary,
     y = "Mean Shannon Diversity (H') ± SE")
 print(fig_MAP_park)
 
-#Figure 3: combined MAP and MAT regressions
+#Figure 4: combined MAP and MAT regressions
 fig_reg_combined <- fig_reg_park + fig_MAP_park+
   plot_annotation(tag_levels = "a",
                   tag_prefix  = "(",
@@ -405,7 +403,6 @@ ggsave("regression_MAT_MAP_combined.svg", fig_reg_combined,
        width = 14, height = 5, dpi = 300)
 
 #===============================================================================
-#Research Question 3 
 #How have focal species changed in abundance over time?
 
 summary_PHYLEMP <- dat %>%
@@ -457,6 +454,7 @@ print(summary(model_heather_white))
 
 
 #Figure 5: All three species on one panel
+
 all_focal <- bind_rows(
   summary_PHYLEMP %>% mutate(Species = "Pink Mtn Heather\n(Phyllodoce empetriformis)"),
   summary_VACCSCO %>% mutate(Species = "Grouseberry\n(Vaccinium scoparium)"),
@@ -465,6 +463,13 @@ all_focal <- bind_rows(
     "Pink Mtn Heather\n(Phyllodoce empetriformis)",
     "Grouseberry\n(Vaccinium scoparium)",
     "White Mtn Heather\n(Cassiope mertensiana)" )))
+label_df <- data.frame(
+  Species = factor(
+    c("Pink Mtn Heather\n(Phyllodoce empetriformis)",
+      "Grouseberry\n(Vaccinium scoparium)",
+      "White Mtn Heather\n(Cassiope mertensiana)"),
+    levels = levels(all_focal$Species)),
+  label = c("(a)", "(b)", "(c)"))
 
 fig_all_focal <- ggplot(all_focal,
                         aes(x = Year, y = mean_cover,
@@ -475,7 +480,15 @@ fig_all_focal <- ggplot(all_focal,
               alpha = 0.15, colour = NA) +
   geom_line(linewidth = 1) +
   geom_point(size = 2.5) +
-  scale_colour_manual(values = c("#C1440E", "#4A7C9E", "#2D6A4F"))+
+  geom_text(data = label_df,
+            aes(x = -Inf, y = Inf, label = label),
+            hjust    = 1.52,
+            vjust    = -1.5,
+            colour   = "black",
+            size     = 3.87,
+            inherit.aes = FALSE) +
+  coord_cartesian(clip = "off") +    
+   scale_colour_manual(values = c("#C1440E", "#4A7C9E", "#2D6A4F"))+
   scale_fill_manual(values   = c("#C1440E", "#4A7C9E", "#2D6A4F"))+
   scale_x_continuous(breaks = sort(unique(dat$Year))) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.15))) + 
@@ -485,9 +498,10 @@ fig_all_focal <- ggplot(all_focal,
         legend.title     = element_blank(),
         axis.text.x      = element_text(angle = 45, hjust = 1),
         strip.background = element_blank(),
-        strip.text       = element_text(face = "bold.italic", size = 10),
+        strip.text       = element_text(size = 11, family = "sans"),
         panel.spacing    = unit(1.2, "lines"),    
-        strip.placement  = "outside") +
+        strip.placement  = "outside",
+        plot.margin      = margin(t = 15, r = 5, b = 5, l = 5)) +
   labs(       x = "Year", y = "Mean % Cover")
 
 print(fig_all_focal)
